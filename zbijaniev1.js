@@ -30,20 +30,15 @@ GAME.initiate = function(){
 	$('#available_servers').html(con);
 	$('#available_servers option[value='+this.server+']').prop('selected',true);
 }
-GAME.questAction = function(){
-    if(this.quest_action){
-         GAME.socket.emit('ga',{a:22,type:7,id:GAME.quest_action_qid,cnt:GAME.quest_action_max});
-    }
-}
+
+var wait2 = 15
+var checkSSJ = false;
 $(document).bind('keydown', '1', function(){
         if(JQS.chm.is(":focus") == false){
           $('#gh_game_helper .gh_exp').click()
         }
         return false;
     });
-var wait2 = 1
-var checkSSJ = true;
-var a= 0;
 // -----------------------------------
 
 // global constants
@@ -53,7 +48,8 @@ const SENZU_BLUE = 'SENZU_BLUE'
 const SENZU_GREEN = 'SENZU_GREEN'
 const SENZU_YELLOW = 'SENZU_YELLOW'
 const SENZU_RED = 'SENZU_RED'
-var collectBlueSenzuOn = false; //zatrzyamnie skryptu po zebraniu maksymalnej ilooci niebieskich fasolek
+const bateria = 'bateria'
+const bateria450k = 'bateria450k'
 
 // -----------------------------------
 
@@ -62,12 +58,12 @@ var collectBlueSenzuOn = false; //zatrzyamnie skryptu po zebraniu maksymalnej il
 /**
  * Określa ilość niebieskich senzu, które będą używane podczas odnawiania PA
  */
-const CONF_BLUE_AMOUNT = Math.floor(GAME.getCharMaxPr() / 100 * 0.10)
+const CONF_BLUE_AMOUNT = 1000
 
 /**
  * Określa ilość zielonych senzu, które będą używane podczas odnawiania PA
  */
-const CONF_GREEN_AMOUNT = Math.floor(GAME.char_data.pr_max/40000)
+const CONF_GREEN_AMOUNT = 1
 
 /**
  * Określa ilość żółtych senzu, które będą używane podczas odnawiania PA
@@ -77,7 +73,7 @@ const CONF_YELLOW_AMOUNT = 1
 /**
  * Określa przy jakiej ilości PA mają zostać użyte senzu
  */
-var CONF_MIN_PA = Math.floor(GAME.getCharMaxPr() / 100 * 0.4)
+const CONF_MIN_PA = 1300
 
 /**
  * Określa jakia powinna zostać użyta subka
@@ -85,7 +81,7 @@ var CONF_MIN_PA = Math.floor(GAME.getCharMaxPr() / 100 * 0.4)
  * false - wyłączone odpalanie subki
  * <0-7> - wartości od 0 do 7, gdzie kolejno 0 to ostka, natomiast 7 to x2
  */
-
+const CONF_SUB = 0
 
 /**
  * Określa jakie senzu powinny zostać użyte przy odnawianiu PA
@@ -110,28 +106,24 @@ let left = false
 let right = true
 let up = false
 let down = false
-var CONF_SUB = false
+
 let antybotPath = false
 let stop = true
 let moveTimeout
+
 let collectedCSK = 0
-var zmiana = true;
 var tabela99;
-var gk=GAME.pid;
-
 // -----------------------------------
 
 // -----------------------------------
-
-
 /* TEMPLATE */
 const $css = "#gh_game_helper {min-width:100px; padding:5px; border:solid gray 1px; background:rgba(22, 22, 93, 0.81); color:gold; position: fixed; top: 40px; right: 5px; z-index:5;}#gh_game_helper .gh_button {cursor:pointer;text-align:center; border-bottom:solid gray 1px;}";
 
-const $html = "<div class='gh_button gh_exp'>EXP <b class='gh_status red'>Off</b></div><div class='gh_button gh_xost'>xOst <b class='gh_status red'>Off</b></div><div class='gh_button gh_x20'>x20 <b class='gh_status red'>Off</b></div><div class='gh_button gh_limit'>Limit <b class='gh_status red'>Off</b></div>";
+const $html = "<div class='gh_button gh_exp'>Exp <b class='gh_status red'>Off</b></div>";
 
 $('body').append("<div id='gh_game_helper'>"+$html+"</div>").append("<style>"+$css+"</style>");
 
-/* ACTIONS */
+
 $('#gh_game_helper .gh_exp').click(() => {
 	if (stop) {
 		$('#gh_game_helper .gh_exp')
@@ -144,59 +136,8 @@ $('#gh_game_helper .gh_exp').click(() => {
 		stop = true
 	}
 });
-$('#gh_game_helper .gh_limit').click(() => {
-	if (!collectBlueSenzuOn) {
-		$('#gh_game_helper .gh_limit')
-		$(".gh_limit .gh_status").removeClass("red").addClass("green").html("On");
-		collectBlueSenzuOn = true;
-	} else {
-		$('#gh_game_helper .gh_limit')
-		$(".gh_limit .gh_status").removeClass("green").addClass("red").html("Off");
-		setTimeout(() => { move() }, 500);
-		collectBlueSenzuOn = false;
-	}
-});
-$('#gh_game_helper .gh_x20').click(() => {
-	if (zmiana) {
-		$('#gh_game_helper .gh_x20')
-		$(".gh_x20 .gh_status").removeClass("red").addClass("green").html("On");
-		CONF_SUB = 1;
-		zmiana=false;
-		$(".gh_xost .gh_status").removeClass("green").addClass("red").html("Off");
-	} else {
-		$('#gh_game_helper .gh_x20')
-		$(".gh_x20 .gh_status").removeClass("green").addClass("red").html("Off");
-		CONF_SUB = false;
-		zmiana=true;
-	}
-});
-$('#gh_game_helper .gh_xost').click(() => {
-	if (zmiana) {
-		$('#gh_game_helper .gh_xost')
-		$(".gh_xost .gh_status").removeClass("red").addClass("green").html("On");
-		CONF_SUB = 0;
-		zmiana=false;
-		$(".gh_x20 .gh_status").removeClass("green").addClass("red").html("Off");
-	} else {
-		$('#gh_game_helper .gh_xost')
-		$(".gh_xost .gh_status").removeClass("green").addClass("red").html("Off");
-		CONF_SUB = false;	
-		zmiana=true;
-	}	
-});
-
 // -----------------------------------
-function collectBlueSenzu(){
-if(collectBlueSenzuOn){
-if(GAME.char_data.senzu_limit < GAME.senzu_limit()){ //Sprawdzenie czy ilooa zebranych fasolek jest mniejsza od maksymalnej dopuszczalnej liczby fasolek do zebrania
-return true;
-}else {
-return false;
-}
-}else{
-return true;
-}
-}
+
 // -----------------------------------
 // functions
 /**
@@ -438,24 +379,12 @@ function fight (mob_num = 0) {
 	if (stop) return
 
 	// check if mob exists on field and has no multi fight yet
-	if(MF() > 0 && GAME.field_mf < 2){
-        GAME.emitOrder({a:7,order:2,quick:1,fo:GAME.map_options.ma}); // kill elite if exists
-    }else if (GAME.field_mobs[mob_num].ranks[3] && GAME.mf[GAME.field_mobs[mob_num].mob_id] !== 3) fightLegend(mob_num) // kill legend if exists
-	else if (GAME.field_mobs[mob_num].ranks[4]) fightEpic(mob_num) // kill epic if exists
-	else if (GAME.field_mobs[mob_num].ranks[5]) fightMystic(mob_num) // kill mystic if exists
+	if(GAME.field_mobs[0].ranks[2] > 0 && GAME.field_mf < 2){
+        GAME.emitOrder({a: 7, mob_num: 0, rank: 2, quick: 1}); // kill elite if exists
+    }
 	else GAME.emitOrder({a: 13, mob_num: mob_num, fo: GAME.map_options.ma}) // multi attack
 }
 
-function MF(){
-    r = 0;
-    for(i=0; i<GAME.map_options.ma.length-1; i++){
-        if(GAME.map_options.ma[i] === 1){
-            r += parseInt(GAME.field_mobs[0].ranks[i]);
-        }
-    }
-    
-    return r;
-}
 function fightLegend (mob_num = 0) {
 	GAME.emitOrder({a: 7, mob_num: mob_num, rank: 3, quick: 1});
 }
@@ -469,16 +398,8 @@ function fightMystic (mob_num = 0) {
 }
 
 function areMobsOnField() {
-	const mob_index = GAME.field_mobs.findIndex(field_mob => {
-		return field_mob.ranks.some((rank, index) => {
-			// first part checks if multiattack option for specified mob rank is enabled
-			// second part checks if mob with specified rank exists in the cell
-			return GAME.map_options.ma[index] && rank > 0
-		})
-	})
-
-	if (mob_index === -1) return false
-	else return { mob_num: mob_index }
+	
+	
 }
 
 // ===================================
@@ -493,6 +414,10 @@ function getSenzu(type) {
       return GAME.quick_opts.senzus.find(senzu => senzu.item_id === 1260)
     case SENZU_RED:
       return GAME.quick_opts.senzus.find(senzu => senzu.item_id === 1243)
+	case bateria:
+      return GAME.quick_opts.senzus.find(senzu => senzu.item_id === 1309)		
+	case bateria450k:
+      return GAME.quick_opts.senzus.find(senzu => senzu.item_id === 1308)	
   }
 }
 
@@ -508,7 +433,9 @@ function useSenzu () {
 	const green = getSenzu(SENZU_GREEN)
 	const yellow = getSenzu(SENZU_YELLOW)
 	const red = getSenzu(SENZU_RED)
-
+	const battery = getSenzu(bateria)
+	const battery450k = getSenzu(bateria450k)
+	
 	switch (CONF_SENZU) {
 		case SENZU_BLUE:
 			useBlue(Math.min(CONF_BLUE_AMOUNT, blue.stack))
@@ -525,12 +452,25 @@ function useSenzu () {
 		case SENZU_RED:
 		  useRed()
 		  break
-
+		case bateria:
+		  usebateria()
+		  break
+		case bateria450k:
+		  usebateria450k()
+		  break	
 		default:
 			if (blue && blue.stack > 0)
 				useBlue(Math.min(CONF_BLUE_AMOUNT, blue.stack))
+			else if (green && green.stack > 0)
+				useGreen(Math.min(CONF_GREEN_AMOUNT, green.stack))
+			else if (yellow && yellow.stack > 0)
+				useYellow(Math.min(CONF_YELLOW_AMOUNT, yellow.stack))
 			else if (red && red.stack > 0)
 				useRed()
+			else if (bateria && bateria.stack > 0)
+				usebateria()
+			else if (bateria450k && bateria450k.stack > 0)
+				usebateria450k()				
 	}
 }
 
@@ -601,6 +541,38 @@ function useRed() {
     am: 1
   })
 }
+function usebateria() {
+const battery = getSenzu(bateria)
+
+  if (!bateria) {
+    move()
+    return
+  }
+
+  GAME.emitOrder({
+    a: 12,
+    type: 14,
+    iid: battery.id,
+    page: GAME.ekw_page,
+    am: 1
+  })
+}
+function usebateria450k() {
+const battery450k = getSenzu(bateria450k)
+
+  if (!bateria450k) {
+    move()
+    return
+  }
+
+  GAME.emitOrder({
+    a: 12,
+    type: 14,
+    iid: battery450k.id,
+    page: GAME.ekw_page,
+    am: 1
+  })
+}
 
 // ===================================
 // SUBSTANCE
@@ -611,6 +583,7 @@ function useSub () {
 		iid: GAME.quick_opts.sub[CONF_SUB].id
 	})
 }
+
 function useSub1 () {
 	GAME.emitOrder({
 		a: 12,
@@ -619,17 +592,14 @@ function useSub1 () {
 }
 
 // ===================================
-
-
-// ===================================
 // SSJ
 function checkTR()
 {
-	if(checkSSJ && GAME.quick_opts.ssj)
+	if(checkSSJ)
 	{
 		if($("#ssj_bar")[0].attributes[2].value=="display: none;")
 		{
-			GAME.emitOrder({a: 18, type: 5, tech_id: GAME.quick_opts.ssj[0]});
+			GAME.emitOrder({a:18,type:5,tech_id:parseInt(document.getElementById("quick_bar").children[2].attributes[2].value)});
 			return true;
 		}
 		else if ($('#ssj_status').text()=="--:--:--"){
@@ -662,11 +632,9 @@ if($(".black_db").length>0){
 // MOVE
 function move () {
 	if (stop) return
-	if (!collectBlueSenzu())
-	return
 
 	if (moveTimeout) clearTimeout(moveTimeout)
-	moveTimeout = setTimeout(move, 200) // trigger move after 7 seconds without move action
+	moveTimeout = setTimeout(move, 1000) // trigger move after 7 seconds without move action
 
 	if (GAME.char_data.pr <= CONF_MIN_PA) {
 		useSenzu()
@@ -676,15 +644,12 @@ function move () {
 		 setTimeout(function(){useSub()},500);
 		return
 	}
-	if($ssj_bar.style.display === 'none' || GAME.ssj_end * 1000 < new Date().getTime()) {
-		setTimeout(function(){checkTR()},500);
-		return
-	}
 	subkaa=$('#doubler_status').text();
 	if (CONF_SUB !== false && subkaa <= '00:00:02') {
 		setTimeout(function(){useSub1()},500);
 		return
 	}
+
 	
 
 	if (isAntybotActive()) {
@@ -727,41 +692,45 @@ function move () {
 	else if (right) goRight()
 }
 
+var gk=GAME.pid;
 // ===================================
 // RESPONSE HANDLING
 function handleResponse (res) {
 	// on move response
-	if (res.a === 4 && res.char_id === GAME.char_id && tabela99.includes(gk)){
+	if (res.a === 4 && res.char_id === GAME.char_id && tabela99.includes(gk)) setTimeout(() => {
 		// when in the cell are some mobs
 		const mobs = areMobsOnField()
 		if (mobs) {
 			fight(mobs.mob_num)
 			return
 		}
-		 setTimeout(() => { fight(); }, wait2);
-	}
+		 fight()
+	}, wait2);
 
 	// on fight response
-	else if (res.a === 7 && tabela99.includes(gk)) {
+	else if (res.a === 7 && tabela99.includes(gk)) setTimeout(() => {
 		// when in the cell are some mobs
 		const mobs = areMobsOnField()
 		if (mobs) {
 			fight(mobs.mob_num)
 			return
 		}
-		setTimeout(() => { move(); }, wait2);
-	}
+		if(!collectCSK()) move()
+	}, wait2);
 
 	// on senzu use response
 	else if (res.a === 12 && res.type === 14 && tabela99.includes(gk)) move()
 
-	else if (res.a === 18 && res.ssj && tabela99.includes(gk)) { // Use ssj response
-        setTimeout(() => {  move(); }, 100);
-    } else if (res.a === 12 && res.type === 19 && tabela99.includes(gk)) { // Use sub respone
-        setTimeout(() => {  move(); }, 100);
-    } 
+	// on speed potion use response
+	else if (res.a === 12 && res.type === 19 && tabela99.includes(gk)) move()
 
+	// on SSJ use response
+	else if (res.a === 18 && res.ssj && tabela99.includes(gk)) move()
 
+	// on collect CSK use response
+	else if (res.a === 21 && tabela99.includes(gk)) {
+		if (!collectCSK()) fight()
+	}
 
 	// on empty response (e.g. when player can't move)
 	else if (res.a === undefined ) setTimeout(() => {
