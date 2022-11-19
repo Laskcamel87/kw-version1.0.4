@@ -95,7 +95,7 @@ var CONF_MIN_PA = Math.floor(GAME.getCharMaxPr() / 100 * 0.4)
  *
  * !Chwilowo wspiera tylko BLUE, GREEN, YELLOW i RED
  */
-const CONF_SENZU = false
+const CONF_SENZU = sENZU_RED
 // ===================================
 
 // -----------------------------------
